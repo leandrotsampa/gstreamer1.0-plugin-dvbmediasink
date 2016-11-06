@@ -147,11 +147,19 @@ static guint gst_dvbaudiosink_signals[LAST_SIGNAL] = { 0 };
 		"rate = (int) {8000, 16000}, channels = (int) 1; "
 
 #define XRAW "audio/x-raw"
+#if defined(DREAMBOX) || defined(MAX_PCMRATE_48K)
+#define PCMCAPS \
+		"audio/x-raw, " \
+		"format = (string) { "GST_AUDIO_NE(S32)", "GST_AUDIO_NE(S24)", "GST_AUDIO_NE(S16)", S8, "GST_AUDIO_NE(U32)", "GST_AUDIO_NE(U24)", "GST_AUDIO_NE(U16)", U8 }, " \
+		"layout = (string) { interleaved, non-interleaved }, " \
+		"rate = (int) [ 1, 48000 ], " "channels = (int) [ 1, 2 ]; "
+#else
 #define PCMCAPS \
 		"audio/x-raw, " \
 		"format = (string) { "GST_AUDIO_NE(S32)", "GST_AUDIO_NE(S24)", "GST_AUDIO_NE(S16)", S8, "GST_AUDIO_NE(U32)", "GST_AUDIO_NE(U24)", "GST_AUDIO_NE(U16)", U8 }, " \
 		"layout = (string) { interleaved, non-interleaved }, " \
 		"rate = (int) [ 1, " MAX_PCM_RATE " ], " "channels = (int) [ 1, 2 ]; "
+#endif
 
 static GstStaticPadTemplate sink_factory =
 GST_STATIC_PAD_TEMPLATE(
