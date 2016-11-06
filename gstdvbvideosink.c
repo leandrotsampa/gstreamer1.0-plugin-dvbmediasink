@@ -348,10 +348,10 @@ static void gst_dvbvideosink_class_init(GstDVBVideoSinkClass *self)
  */
 static void gst_dvbvideosink_init(GstDVBVideoSink *self)
 {
-	self->h264_initial_audelim_written = FALSE;
 	self->wait_for_keyframe = FALSE;
 	self->must_send_header = TRUE;
 	self->h264_nal_len_size = 0;
+	self->h264_initial_audelim_written = FALSE;
 	self->pesheader_buffer = NULL;
 	self->codec_data = NULL;
 	self->codec_type = CT_H264;

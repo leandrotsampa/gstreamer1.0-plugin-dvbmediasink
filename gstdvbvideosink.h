@@ -111,8 +111,6 @@ struct _GstDVBVideoSink
 	int fd;
 	int unlockfd[2];
 
-	gint h264_nal_len_size;
-
 	GstBuffer *pesheader_buffer;
 
 	GstBuffer *codec_data;
@@ -122,6 +120,7 @@ struct _GstDVBVideoSink
 	char saved_fallback_framerate[16];
 
 	gboolean wait_for_keyframe;
+	gint h264_nal_len_size;
 	gboolean h264_initial_audelim_written;
 	gdouble rate;
 	gboolean playing, paused, flushing, unlocking, flushed, first_paused;
