@@ -215,6 +215,24 @@ GST_STATIC_PAD_TEMPLATE (
 	"video/x-wmv, "
 		VIDEO_CAPS ", wmvversion = (int) 3; "
 #endif
+#ifdef HAVE_SPARK
+	"video/x-flash-video, "
+		VIDEO_CAPS "; "
+#endif
+#ifdef HAVE_VB6
+	"video/x-vp6, "
+		VIDEO_CAPS "; "
+	"video/x-vp6-flash, "
+		VIDEO_CAPS "; "
+#endif
+#ifdef HAVE_VB8
+	"video/x-vp8, "
+		VIDEO_CAPS "; "
+#endif
+#ifdef HAVE_VB9
+	"video/x-vp9, "
+		VIDEO_CAPS "; "
+#endif
 	)
 );
 
@@ -330,6 +348,8 @@ static void gst_dvbvideosink_class_init(GstDVBVideoSinkClass *self)
  */
 static void gst_dvbvideosink_init(GstDVBVideoSink *self)
 {
+	self->h264_initial_audelim_written = FALSE;
+	self->wait_for_keyframe = FALSE;
 	self->must_send_header = TRUE;
 	self->h264_nal_len_size = 0;
 	self->h264_initial_audelim_written = FALSE;
@@ -471,6 +491,7 @@ static gboolean gst_dvbvideosink_event(GstBaseSink *sink, GstEvent *event)
 			queue_pop(&self->queue);
 		}
 		self->flushing = FALSE;
+		self->wait_for_keyframe = TRUE;
 		GST_OBJECT_UNLOCK(self);
 		/* flush while media is playing requires a delay before rendering */
 		if (self->using_dts_downmix && !self->paused)
@@ -542,6 +563,7 @@ static gboolean gst_dvbvideosink_event(GstBaseSink *sink, GstEvent *event)
 		start_dvb = start / 11111LL;
 		GST_INFO_OBJECT(self, "SEGMENT rate=%f format=%d start=%"G_GUINT64_FORMAT " pos=%"G_GUINT64_FORMAT, rate, format, start, pos);
 		GST_INFO_OBJECT(self, "SEGMENT DVB TIMESTAMP=%"G_GINT64_FORMAT " HEXFORMAT %#"G_GINT64_MODIFIER "x", start_dvb, start_dvb);
+		GST_DEBUG_OBJECT (self, "configured segment %" GST_SEGMENT_FORMAT, segment);
 		if (format == GST_FORMAT_TIME)
 		{
 			self->timestamp_offset = start - pos;
@@ -784,6 +806,16 @@ static GstFlowReturn gst_dvbvideosink_render(GstBaseSink *sink, GstBuffer *buffe
 	{
 		return GST_FLOW_OK;
 	}
+	if (self->codec_type == CT_H264 && self->wait_for_keyframe)
+	{
+		if (GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_DELTA_UNIT))
+		{
+			GST_DEBUG_OBJECT(self, "dropping non-keyframe buffer");
+			return GST_FLOW_OK;
+		}
+		else
+			self->wait_for_keyframe = FALSE;
+	}
 	gint i = 0;
 	/* WAIT 1 seconds after flush needed for enigma2 to be ready*/
 	while (self->ok_to_write == 0)
@@ -971,6 +1003,21 @@ static GstFlowReturn gst_dvbvideosink_render(GstBaseSink *sink, GstBuffer *buffe
 				}
 			}
 		}
+		else if (self->codec_type == CT_VP9 || self->codec_type == CT_VP8 || self->codec_type == CT_VP6 || self->codec_type == CT_SPARK) {
+			uint32_t len = data_len + 4 + 6;
+			memcpy(pes_header+pes_header_len, "BCMV", 4);
+			pes_header_len += 4;
+			if (self->codec_type == CT_VP6)
+				++len;
+			pes_header[pes_header_len++] = (len & 0xFF000000) >> 24;
+			pes_header[pes_header_len++] = (len & 0x00FF0000) >> 16;
+			pes_header[pes_header_len++] = (len & 0x0000FF00) >> 8;
+			pes_header[pes_header_len++] = (len & 0x000000FF) >> 0;
+			pes_header[pes_header_len++] = 0;
+			pes_header[pes_header_len++] = 0;
+			if (self->codec_type == CT_VP6)
+				pes_header[pes_header_len++] = 0;
+		}
 	}
 
 	payload_len = data_len + pes_header_len - 6;
@@ -1133,7 +1180,7 @@ static gboolean gst_dvbvideosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
 	const char *mimetype = gst_structure_get_name (structure);
 	t_stream_type prev_stream_type = self->stream_type;
 	self->stream_type = STREAMTYPE_UNKNOWN;
-	//self->must_send_header = TRUE;
+	self->must_send_header = TRUE;
 
 	GST_INFO_OBJECT (self, "caps = %" GST_PTR_FORMAT, caps);
 
@@ -1419,11 +1466,15 @@ static gboolean gst_dvbvideosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
 			}
 			break;
 			case 4:
-				self->stream_type = STREAMTYPE_DIVX4;
-				self->codec_type = CT_DIVX4;
-				self->codec_data = gst_buffer_new_and_alloc(12);
-				gst_buffer_fill(self->codec_data, 0, "\x00\x00\x01\xb2\x44\x69\x76\x58\x34\x41\x4e\x44", 12);
-				GST_INFO_OBJECT (self, "MIMETYPE video/x-divx vers. 4 -> STREAMTYPE_DIVX4");
+				self->stream_type = STREAMTYPE_MPEG4_Part2;
+				self->codec_type = CT_MPEG4_PART2;
+				const GValue *codec_data = gst_structure_get_value(structure, "codec_data");
+				if (codec_data)
+				{
+					self->codec_data = gst_value_get_buffer(codec_data);
+					gst_buffer_ref (self->codec_data);
+				}
+				GST_INFO_OBJECT (self, "MIMETYPE video/x-divx vers. 4 -> STREAMTYPE_MPEG4_Part2");
 			break;
 			case 6:
 			case 5:
@@ -1455,6 +1506,30 @@ static gboolean gst_dvbvideosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
 			self->codec_type = CT_VC1_SM;
 			GST_INFO_OBJECT (self, "MIMETYPE video/x-wmv %s -> STREAMTYPE_VC1_SM", value);
 		}
+	}
+	else if (!strcmp (mimetype, "video/x-vp6") || !strcmp (mimetype, "video/x-vp6-flash"))
+	{
+		self->stream_type = STREAMTYPE_VB6;
+		self->codec_type = CT_VP6;
+		GST_INFO_OBJECT (self, "MIMETYPE %s -> VIDEO_SET_STREAMTYPE, STREAMTYPE_VB6", mimetype);
+	}
+	else if (!strcmp (mimetype, "video/x-vp8"))
+	{
+		self->stream_type = STREAMTYPE_VB8;
+		self->codec_type = CT_VP8;
+		GST_INFO_OBJECT (self, "MIMETYPE video/x-vp8 -> VIDEO_SET_STREAMTYPE, STREAMTYPE_VB8");
+	}
+	else if (!strcmp (mimetype, "video/x-vp9"))
+	{
+		self->stream_type = STREAMTYPE_VB9;
+		self->codec_type = CT_VP9;
+		GST_INFO_OBJECT (self, "MIMETYPE video/x-vp9 -> VIDEO_SET_STREAMTYPE, STREAMTYPE_VB9");
+	}
+	else if (!strcmp (mimetype, "video/x-flash-video"))
+	{
+		self->stream_type = STREAMTYPE_SPARK;
+		self->codec_type = CT_SPARK;
+		GST_INFO_OBJECT (self, "MIMETYPE video/x-flash-video -> VIDEO_SET_STREAMTYPE, STREAMTYPE_SPARK");
 	}
 
 	if (self->stream_type != STREAMTYPE_UNKNOWN)

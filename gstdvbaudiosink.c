@@ -87,7 +87,6 @@ enum
 	PROP_LAST,
 };
 
-
 enum
 {
 	SIGNAL_GET_DECODER_TIME,
@@ -95,7 +94,6 @@ enum
 };
 
 static guint gst_dvbaudiosink_signals[LAST_SIGNAL] = { 0 };
-
 
 #if defined(HAVE_DTSDOWNMIX) && !defined(HAVE_DTS)
 #define HAVE_DTS
@@ -110,11 +108,7 @@ static guint gst_dvbaudiosink_signals[LAST_SIGNAL] = { 0 };
 		"audio/mpeg, " \
 		"mpegversion = (int) { 2, 4 }, " \
 		"profile = (string) lc, " \
-		"stream-format = (string) { raw, adts, adif }, " \
-		"framed = (boolean) true; " \
-		"audio/mpeg, " \
-		"mpegversion = (int) { 2, 4 }, " \
-		"stream-format = (string) loas, " \
+		"stream-format = (string) { raw, adts, adif, loas }, " \
 		"framed = (boolean) true; "
 #else
 #define MPEGCAPS \
@@ -153,19 +147,11 @@ static guint gst_dvbaudiosink_signals[LAST_SIGNAL] = { 0 };
 		"rate = (int) {8000, 16000}, channels = (int) 1; "
 
 #define XRAW "audio/x-raw"
-#if defined(DREAMBOX) || defined(MAX_PCMRATE_48K)
 #define PCMCAPS \
 		"audio/x-raw, " \
 		"format = (string) { "GST_AUDIO_NE(S32)", "GST_AUDIO_NE(S24)", "GST_AUDIO_NE(S16)", S8, "GST_AUDIO_NE(U32)", "GST_AUDIO_NE(U24)", "GST_AUDIO_NE(U16)", U8 }, " \
 		"layout = (string) { interleaved, non-interleaved }, " \
-		"rate = (int) [ 1, 48000 ], " "channels = (int) [ 1, 2 ]; "
-#else
-#define PCMCAPS \
-		"audio/x-raw, " \
-		"format = (string) { "GST_AUDIO_NE(S32)", "GST_AUDIO_NE(S24)", "GST_AUDIO_NE(S16)", S8, "GST_AUDIO_NE(U32)", "GST_AUDIO_NE(U24)", "GST_AUDIO_NE(U16)", U8 }, " \
-		"layout = (string) { interleaved, non-interleaved }, " \
-		"rate = (int) [ 1, MAX ], " "channels = (int) [ 1, 2 ]; "
-#endif
+		"rate = (int) [ 1, " MAX_PCM_RATE " ], " "channels = (int) [ 1, 2 ]; "
 
 static GstStaticPadTemplate sink_factory =
 GST_STATIC_PAD_TEMPLATE(
