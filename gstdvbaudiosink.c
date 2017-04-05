@@ -432,7 +432,14 @@ static GstCaps *gst_dvbaudiosink_get_caps(GstBaseSink *basesink, GstCaps *filter
 #endif
 	);
 
-#if defined(HAVE_DTS) && !defined(HAVE_DTSDOWNMIX)
+#if defined(HAVE_DTS) && !defined(HAVE_DTSDOWNMIX) && defined(VUPLUS)
+	if (!get_downmix_setting())
+	{
+	gst_caps_append(caps, gst_caps_from_string(DTSCAPS));
+	}
+#endif
+
+#if defined(HAVE_DTS) && !defined(HAVE_DTSDOWNMIX) && !defined(VUPLUS)
 	gst_caps_append(caps, gst_caps_from_string(DTSCAPS));
 #endif
 
@@ -461,6 +468,8 @@ static gboolean gst_dvbaudiosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
 
 	self->skip = 0;
 	self->aac_adts_header_valid = FALSE;
+
+	GST_INFO_OBJECT (self, "caps = %" GST_PTR_FORMAT, caps);
 
 	if (self->codec_data)
 	{
@@ -755,7 +764,7 @@ static gboolean gst_dvbaudiosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
 		return FALSE;
 	}
 
-	GST_INFO_OBJECT(self, "setting dvb mode 0x%02x\n", bypass);
+	GST_INFO_OBJECT(self, "set bypass 0x%02x", bypass);
 
 	if (self->playing)
 	{
@@ -783,6 +792,7 @@ static gboolean gst_dvbaudiosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
 	if (self->fd < 0 || ioctl(self->fd, AUDIO_SET_BYPASS_MODE, bypass) < 0)
 	{
 		GST_ELEMENT_ERROR(self, STREAM, TYPE_NOT_FOUND,(NULL),("hardware decoder can't be set to bypass mode type %s", type));
+		GST_INFO_OBJECT(self, "AUDIO BYPASS 0x%02x CAN NOT BE SET", bypass);
 		return FALSE;
 	}
 #endif
@@ -790,6 +800,7 @@ static gboolean gst_dvbaudiosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
 	self->playing = TRUE;
 
 	self->bypass = bypass;
+	GST_INFO_OBJECT(self, "AUDIO PLAY STARTED ON BY-PASS 0x%02x", bypass);
 	return TRUE;
 }
 
@@ -1506,6 +1517,25 @@ static GstStateChangeReturn gst_dvbaudiosink_change_state(GstElement *element, G
 	{
 	case GST_STATE_CHANGE_NULL_TO_READY:
 		GST_INFO_OBJECT(self,"GST_STATE_CHANGE_NULL_TO_READY");
+// special debug added to check correct machinebuild during development phase
+#ifdef DREAMBOX
+		GST_INFO_OBJECT(self,"BUILD FOR DREAMBOX");
+#endif
+#ifdef VUPLUS
+		GST_INFO_OBJECT(self,"BUILD FOR VUPLUS");
+#endif
+/* 	This debug added to check that sink was build for right boxtype
+	In openatv the DVBMEDIASINK_CONFIG will in future be based on ${MACHINEBUILD}
+	Depending on that other defines and or specific machine code can be set.
+	Some extra defines will be added to configur.ac file and then be used to limit
+	code lines or change some codelines at compile time, then the final build dvbmediasink
+	can be kept small and small into memory also, cause some older stb'so have very few memory.
+	But machine build is also added as a defined var containing the stb box type , this can then be used :
+	in a if (!strcmp(machinebuild, "<stbtype>")) where stbtype comes from ${MACHINEBUILD} at compile time.
+	example for a dreambox 8000 it will be dm8000 for vuplus duo2 it will be vuduo2 for mutant hd51 it will be mutant51. */
+#ifdef machinebuild
+		GST_INFO_OBJECT(self,"BUILD FOR STB BOXTYPE %s", machinebuild);
+#endif
 		self->ok_to_write = 1;
 		break;
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
@@ -1517,6 +1547,8 @@ static GstStateChangeReturn gst_dvbaudiosink_change_state(GstElement *element, G
 			ioctl(self->fd, AUDIO_SELECT_SOURCE, AUDIO_SOURCE_MEMORY);
 			ioctl(self->fd, AUDIO_PAUSE);
 		}
+// dreambox driver issue patch
+#ifdef DREAMBOX
 		if(get_downmix_ready())
 			self->using_dts_downmix = TRUE;
 		break;

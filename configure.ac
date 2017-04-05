@@ -256,20 +256,6 @@ if test "$have_dtsdownmix" = "yes"; then
 	AC_DEFINE([HAVE_DTSDOWNMIX],[1],[Define to 1 for DTS downmix support])
 fi
 
-AC_ARG_WITH(vuplus,
-	AS_HELP_STRING([--with-vuplus],[build for vuplus, yes or no]),
-	[vuplus=$withval],[vuplus=no])
-if test "$vuplus" = "yes"; then
-	AC_DEFINE([VUPLUS],[1],[Define to 1 for vuplus ])
-fi
-
-AC_ARG_WITH(dreambox,
-	AS_HELP_STRING([--with-dreambox],[build for dreambox, yes or no]),
-	[dreambox=$withval],[dreambox=no])
-if test "$dreambox" = "yes"; then
-	AC_DEFINE([DREAMBOX],[1],[build for dreambox, yes or no ])
-fi
-
 AC_ARG_WITH(max_pcmrate_48K,
 	AS_HELP_STRING([--with-max-pcmrate-48K],[Max PCM rate 48K, yes or no]),
 	[max_pcmrate_48K=$withval],[max_pcmrate_48K=no])
@@ -287,6 +273,22 @@ AC_ARG_WITH(dags,
 	[dags=$withval],[dags=no])
 if test "$dags" = "yes"; then
 	AC_DEFINE([DAGS],[1],[build for dags, yes or no ])
+fi
+
+AC_ARG_WITH(machine,
+	AS_HELP_STRING([--with-machine],[build for machine, $withval]),
+	[machine=$withval],[machine=generic])
+AC_SUBST(machine)
+AC_DEFINE_UNQUOTED(machine,"$machine",[machine build])
+if test `echo "$machine" | cut -b 1-2` == "dm"; then
+	AC_DEFINE([DREAMBOX],[1],[build for DREAMBOX ])
+fi
+if test `echo "$machine" | cut -b 1-2` == "vu"; then
+	AC_DEFINE([VUPLUS],[1],[build for VUPLUS ])
+	AC_DEFINE([TYPE2],[1],[build bybass TYPE2])
+fi
+if [ test "$machine" = "xc7362" || test "$machine" = "xc7346" ]; then
+	AC_DEFINE([TYPE2],[1],[build bybass TYPE2])
 fi
 
 DTS_LIBS="-ldca $LIBM"
