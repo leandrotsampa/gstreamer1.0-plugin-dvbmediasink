@@ -256,17 +256,19 @@ if test "$have_dtsdownmix" = "yes"; then
 	AC_DEFINE([HAVE_DTSDOWNMIX],[1],[Define to 1 for DTS downmix support])
 fi
 
+AC_ARG_WITH(force_dtsdownmix,
+	AS_HELP_STRING([--with-force-dtsdownmix],[Forces dts downmix, yes or no]),
+	[force_dtsdownmix=$withval],[force_dtsdownmix=no])
+if test "$force_dtsdownmix" = "yes"; then
+	AC_DEFINE([FORCE_DTSDOWNMIX],[1],[Define to 1 to force dts downmix])
+fi
+
 AC_ARG_WITH(max_pcmrate_48K,
 	AS_HELP_STRING([--with-max-pcmrate-48K],[Max PCM rate 48K, yes or no]),
 	[max_pcmrate_48K=$withval],[max_pcmrate_48K=no])
 if test "$max_pcmrate_48K" = "yes"; then
 	AC_DEFINE([MAX_PCMRATE_48K],[1],[Max PCM rate 48K, yes or no ])
 fi
-
-AC_ARG_WITH(maxpcmrate,
-	AS_HELP_STRING([--with-maxpcmrate],[Max PCM rate, default is 48000]),
-	[have_maxpcmrate=$withval],[have_maxpcmrate=48000])
-AC_DEFINE_UNQUOTED([MAX_PCM_RATE],["$have_maxpcmrate"],[Max PCM rate])
 
 AC_ARG_WITH(dags,
 	AS_HELP_STRING([--with-dags],[build for dags, yes or no]),
@@ -279,7 +281,7 @@ AC_ARG_WITH(machine,
 	AS_HELP_STRING([--with-machine],[build for machine, $withval]),
 	[machine=$withval],[machine=generic])
 AC_SUBST(machine)
-AC_DEFINE_UNQUOTED(machine,"$machine",[machine build])
+AC_DEFINE_UNQUOTED(machine,"$machine",[machine])
 if test `echo "$machine" | cut -b 1-2` == "dm"; then
 	AC_DEFINE([DREAMBOX],[1],[build for DREAMBOX ])
 fi
@@ -292,6 +294,10 @@ if test `echo "$machine" | cut -b 1-4` == "gb73"; then
 fi
 if [ test "$machine" = "xc7362" || test "$machine" = "xc7346" ]; then
 	AC_DEFINE([TYPE2],[1],[build bybass TYPE2])
+fi
+
+if [ test "$machine" = "hd51" -o "$BOXTYPE" == "vs1500"]; then
+	AC_DEFINE([MAX_DTS_FRAMESIZE_2012],[1],[max dts framesize supported by driver])
 fi
 
 DTS_LIBS="-ldca $LIBM"

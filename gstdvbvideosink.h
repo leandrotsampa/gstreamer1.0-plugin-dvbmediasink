@@ -67,7 +67,22 @@ typedef struct _GstDVBVideoSink		GstDVBVideoSink;
 typedef struct _GstDVBVideoSinkClass	GstDVBVideoSinkClass;
 typedef struct _GstDVBVideoSinkPrivate	GstDVBVideoSinkPrivate;
 
-typedef enum { CT_MPEG1, CT_MPEG2, CT_H264, CT_DIVX311, CT_DIVX4, CT_MPEG4_PART2, CT_VC1, CT_VC1_SM, CT_H265, CT_SPARK, CT_VP6, CT_VP8, CT_VP9 } t_codec_type;
+typedef enum {
+	CT_UNKNOWN = -1,
+	CT_MPEG1 = 0,
+	CT_MPEG2 = 1,
+	CT_H264 = 2,
+	CT_DIVX311 = 3,
+	CT_DIVX4 = 4,
+	CT_MPEG4_PART2 = 5,
+	CT_VC1 = 6,
+	CT_VC1_SM = 7,
+	CT_H265 = 8,
+	CT_SPARK = 9,
+	CT_VP6 = 10,
+	CT_VP8 = 11,
+	CT_VP9 = 12
+} t_codec_type;
 #if defined(DREAMBOX)
 typedef enum {
 	STREAMTYPE_UNKNOWN = -1,
@@ -100,8 +115,6 @@ typedef enum {
 	STREAMTYPE_VC1_SM = 5,
 	STREAMTYPE_MPEG1 = 6,
 	STREAMTYPE_MPEG4_H265 = 7,
-	STREAMTYPE_VB8 = 8,
-	STREAMTYPE_VB9 = 9,
 	STREAMTYPE_XVID = 10,
 	STREAMTYPE_DIVX311 = 13,
 	STREAMTYPE_DIVX4 = 14,
@@ -140,6 +153,9 @@ struct _GstDVBVideoSink
 	int fd;
 	int unlockfd[2];
 
+	gint h264_nal_len_size;
+	gboolean h264_initial_audelim_written;
+
 	GstBuffer *pesheader_buffer;
 
 	GstBuffer *codec_data;
@@ -149,9 +165,6 @@ struct _GstDVBVideoSink
 
 	char saved_fallback_framerate[16];
 
-	gboolean wait_for_keyframe;
-	gint h264_nal_len_size;
-	gboolean h264_initial_audelim_written;
 	gdouble rate;
 	gboolean playing, paused, flushing, unlocking, flushed, first_paused;
 	gboolean using_dts_downmix;
