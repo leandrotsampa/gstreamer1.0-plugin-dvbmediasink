@@ -294,7 +294,7 @@ static void gst_dvbaudiosink_class_init(GstDVBAudioSinkClass *self)
 		"DVB audio sink",
 		"Generic/DVBAudioSink",
 		"Outputs PES into a linuxtv dvb audio device",
-		"Team LD");
+		"PLi team");
 
 	gobject_class->set_property = gst_dvbaudiosink_set_property;
 	gobject_class->get_property = gst_dvbaudiosink_get_property;
@@ -358,6 +358,7 @@ static void gst_dvbaudiosink_init(GstDVBAudioSink *self)
 	self->timestamp_offset = 0;
 	self->queue = NULL;
 	self->fd = -1;
+	self->fddata = -1;
 	self->unlockfd[0] = self->unlockfd[1] = -1;
 	self->rate = 1.0;
 	self->timestamp = GST_CLOCK_TIME_NONE;
@@ -1055,8 +1056,6 @@ static gboolean gst_dvbaudiosink_event(GstBaseSink *sink, GstEvent *event)
 						previous_pts = current_pts;
 						if(x < 1)
 							x++;
-						else if (previous_pts == -1)
-							break;
 					}
 				}
 				else if (x < 1)
@@ -1198,7 +1197,7 @@ static int audio_write(GstDVBAudioSink *self, GstBuffer *buffer, size_t start, s
 				GstMapInfo queuemap;
 				gst_buffer_map(queuebuffer, &queuemap, GST_MAP_READ);
 				queuedata = queuemap.data;
-				int wr = write(self->fd, queuedata + queuestart, queueend - queuestart);
+				int wr = write(self->fddata, queuedata + queuestart, queueend - queuestart);
 				gst_buffer_unmap(queuebuffer, &queuemap);
 				if (wr < 0)
 				{
@@ -1228,7 +1227,7 @@ static int audio_write(GstDVBAudioSink *self, GstBuffer *buffer, size_t start, s
 				continue;
 			}
 			GST_OBJECT_UNLOCK(self);
-			int wr = write(self->fd, data + written, len - written);
+			int wr = write(self->fddata, data + written, len - written);
 			if (wr < 0)
 			{
 				switch(errno)
@@ -1418,7 +1417,7 @@ GstFlowReturn gst_dvbaudiosink_push_buffer(GstDVBAudioSink *self, GstBuffer *buf
 	}
 
 	pes_set_payload_size(size + pes_header_len - 6, pes_header);
-	if (audio_write(self, self->pesheader_buffer, 0, pes_header_len) < 0) goto error;
+//	if (audio_write(self, self->pesheader_buffer, 0, pes_header_len) < 0) goto error;
 	if (audio_write(self, buffer, data - original_data, data - original_data + size) < 0) goto error;
 	if (timestamp != GST_CLOCK_TIME_NONE)
 	{
@@ -1590,6 +1589,7 @@ static gboolean gst_dvbaudiosink_start(GstBaseSink * basesink)
 	self->pesheader_buffer = gst_buffer_new_and_alloc(256);
 
 	self->fd = open("/dev/dvb/adapter0/audio0", O_RDWR | O_NONBLOCK);
+	self->fddata = open("/tmp/esaudio", O_RDWR | O_NONBLOCK);
 
 	self->pts_written = FALSE;
 	self->lastpts = 0;
@@ -1619,6 +1619,8 @@ static gboolean gst_dvbaudiosink_stop(GstBaseSink * basesink)
 			GST_INFO_OBJECT(self, "STOP AUDIO BUFFER FLUSHED");
 		close(self->fd);
 	}
+	if (self->fddata >= 0)
+		close(self->fddata);
 	if (self->codec_data)
 		gst_buffer_unref(self->codec_data);
 	if (self->pesheader_buffer)
@@ -1657,6 +1659,7 @@ static gboolean gst_dvbaudiosink_stop(GstBaseSink * basesink)
 	self->timestamp_offset = 0;
 	self->queue = NULL;
 	self->fd = -1;
+	self->fddata = -1;
 	self->unlockfd[0] = self->unlockfd[1] = -1;
 	self->rate = 1.0;
 	self->timestamp = GST_CLOCK_TIME_NONE;
@@ -1689,7 +1692,7 @@ static GstStateChangeReturn gst_dvbaudiosink_change_state(GstElement *element, G
 		GST_INFO_OBJECT(self,"BUILD FOR VUPLUS");
 #endif
 /* 	This debug added to check that sink was build for right boxtype
-	In openld the DVBMEDIASINK_CONFIG will in future be based on ${MACHINE}
+	In openatv the DVBMEDIASINK_CONFIG will in future be based on ${MACHINE}
 	Depending on that other defines and or specific machine code can be set.
 	Some extra defines will be added to configur.ac file and then be used to limit
 	code lines or change some codelines at compile time, then the final build dvbmediasink
@@ -1704,7 +1707,7 @@ static GstStateChangeReturn gst_dvbaudiosink_change_state(GstElement *element, G
 		break;
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		GST_INFO_OBJECT(self,"GST_STATE_CHANGE_READY_TO_PAUSED");
-		//self->paused = TRUE;
+		self->paused = TRUE;
 		self->first_paused = TRUE;
 		if (self->fd >= 0)
 		{

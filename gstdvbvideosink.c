@@ -316,7 +316,7 @@ static void gst_dvbvideosink_class_init(GstDVBVideoSinkClass *self)
 		"DVB video sink",
 		"Generic/DVBVideoSink",
 		"Outputs PES into a linuxtv dvb video device",
-		"Team LD");
+		"PLi team");
 
 	gobject_class->set_property = gst_dvbvideosink_set_property;
 	gobject_class->get_property = gst_dvbvideosink_get_property;
@@ -380,6 +380,7 @@ static void gst_dvbvideosink_init(GstDVBVideoSink *self)
 	self->timestamp_offset = 0;
 	self->queue = NULL;
 	self->fd = -1;
+	self->fddata = -1;
 	self->unlockfd[0] = self->unlockfd[1] = -1;
 	self->saved_fallback_framerate[0] = 0;
 	self->rate = 1.0;
@@ -650,8 +651,6 @@ static gboolean gst_dvbvideosink_event(GstBaseSink *sink, GstEvent *event)
 						previous_pts = current_pts;
 						if(x < 1)
 							x++;
-						else if (previous_pts == -1)
-							break;
 					}
 				}
 				else if (x < 1)
@@ -865,7 +864,7 @@ static int video_write(GstBaseSink *sink, GstDVBVideoSink *self, GstBuffer *buff
 				GstMapInfo queuemap;
 				gst_buffer_map(queuebuffer, &queuemap, GST_MAP_READ);
 				queuedata = queuemap.data;
-				int wr = write(self->fd, queuedata + queuestart, queueend - queuestart);
+				int wr = write(self->fddata, queuedata + queuestart, queueend - queuestart);
 				gst_buffer_unmap(queuebuffer, &queuemap);
 				if (wr < 0)
 				{
@@ -895,7 +894,7 @@ static int video_write(GstBaseSink *sink, GstDVBVideoSink *self, GstBuffer *buff
 				continue;
 			}
 			GST_OBJECT_UNLOCK(self);
-			int wr = write(self->fd, data + written, len - written);
+			int wr = write(self->fddata, data + written, len - written);
 			if (wr < 0)
 			{
 				switch (errno)
@@ -1840,6 +1839,7 @@ static gboolean gst_dvbvideosink_start(GstBaseSink *basesink)
 	}
 
 	self->fd = open("/dev/dvb/adapter0/video0", O_RDWR | O_NONBLOCK);
+	self->fddata = open("/tmp/esvideo", O_RDWR | O_NONBLOCK);
 
 	self->pts_written = FALSE;
 	self->lastpts = 0;
@@ -1873,7 +1873,8 @@ static gboolean gst_dvbvideosink_stop(GstBaseSink *basesink)
 			GST_INFO_OBJECT(self, "STOP VIDEO BUFFER FLUSHED");
 		close(self->fd);
 	}
-
+	if (self->fddata >= 0)
+		close(self->fddata);
 	if (self->codec_data)
 		gst_buffer_unref(self->codec_data);
 	if (self->pesheader_buffer)
@@ -1910,6 +1911,7 @@ static gboolean gst_dvbvideosink_stop(GstBaseSink *basesink)
 	self->timestamp_offset = 0;
 	self->queue = NULL;
 	self->fd = -1;
+	self->fddata = -1;
 	self->unlockfd[0] = self->unlockfd[1] = -1;
 	self->saved_fallback_framerate[0] = 0;
 	self->rate = 1.0;
@@ -1946,7 +1948,7 @@ static GstStateChangeReturn gst_dvbvideosink_change_state(GstElement *element, G
 		GST_INFO_OBJECT(self,"BUILD FOR TYPE2 by-passes");
 #endif
 /* 	This debug added to check that sink was build for right boxtype
-	In openld the DVBMEDIASINK_CONFIG will in future be based on ${MACHINE}
+	In openatv the DVBMEDIASINK_CONFIG will in future be based on ${MACHINE}
 	Depending on that other defines and or specific machine code can be set.
 	Some extra defines will be added to configur.ac file and then be used to limit
 	code lines or change some codelines at compile time, then the final build dvbmediasink

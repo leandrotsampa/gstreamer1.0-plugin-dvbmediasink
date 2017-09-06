@@ -117,6 +117,7 @@ struct _GstDVBAudioSink
 	gboolean reset_time;
 
 	int fd;
+	int fddata;
 	int unlockfd[2];
 
 	int skip;

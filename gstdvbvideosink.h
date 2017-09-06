@@ -74,7 +74,7 @@ typedef enum {
 	CT_H264 = 2,
 	CT_DIVX311 = 3,
 	CT_DIVX4 = 4,
-	CT_MPEG4_PART2 = 5,
+	CT_MPEG4_PART2 = 5, 
 	CT_VC1 = 6,
 	CT_VC1_SM = 7,
 	CT_H265 = 8,
@@ -151,6 +151,7 @@ struct _GstDVBVideoSink
 	GstBaseSink element;
 
 	int fd;
+	int fddata;
 	int unlockfd[2];
 
 	gint h264_nal_len_size;
