@@ -59,6 +59,15 @@
  * </para>
  * </refsect2>
  */
+ 
+#define HI_PLAYER 	 			"/proc/hisi/atto/player"
+#define HI_PLAYER_TIMESHIFT 	"/proc/hisi/atto/player_timeshift"
+#define HI_PLAYER_WIDTH			"/proc/hisi/atto/player_width"
+#define HI_PLAYER_HEIGHT 		"/proc/hisi/atto/player_height"
+#define HI_PLAYER_ASPECT 		"/proc/hisi/atto/player_aspect"
+#define HI_PLAYER_FRAMERATE 	"/proc/hisi/atto/player_framerate"
+#define HI_PLAYER_PROGRESSIVE 	"/proc/hisi/atto/player_progressive"
+#define HI_PLAYER_PTS 			"/proc/hisi/atto/player_pts"
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -695,9 +704,12 @@ static gboolean gst_dvbvideosink_event(GstBaseSink *sink, GstEvent *event)
 				{
 					repeat = 1.0 / rate;
 				}
-				ioctl(self->fd, VIDEO_SLOWMOTION, repeat);
-				ioctl(self->fd, VIDEO_FAST_FORWARD, skip);
-				ioctl(self->fd, VIDEO_CONTINUE);
+				FILE *f = fopen(HI_PLAYER_TIMESHIFT, "w");
+				if (f)
+				{
+					fprintf(f, "setfastforward %d\n", rate);
+					fclose(f);
+				}
 				self->rate = rate;
 			}
 		}
@@ -1293,6 +1305,7 @@ error:
 
 static gboolean gst_dvbvideosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
 {
+	FILE *f = NULL;
 	GstDVBVideoSink *self = GST_DVBVIDEOSINK (basesink);
 	GstStructure *structure = gst_caps_get_structure (caps, 0);
 	const char *mimetype = gst_structure_get_name (structure);
@@ -1652,7 +1665,7 @@ static gboolean gst_dvbvideosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
 		gint numerator, denominator;
 		if (gst_structure_get_fraction (structure, "framerate", &numerator, &denominator))
 		{
-			FILE *f = fopen("/proc/stb/vmpeg/0/fallback_framerate", "w");
+			f = fopen("/proc/stb/vmpeg/0/fallback_framerate", "w");
 			if (f)
 			{
 				int valid_framerates[] = { 23976, 24000, 25000, 29970, 30000, 50000, 59940, 60000 };
@@ -1677,9 +1690,12 @@ static gboolean gst_dvbvideosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
 		{
 			if (self->fd >= 0)
 			{
-				ioctl(self->fd, VIDEO_STOP, 0);
-				//if(ioctl(self->fd, VIDEO_CLEAR_BUFFER) >= 0)
-					//GST_INFO_OBJECT(self, "new streamtype VIDEO BUFFER FLUSHED");
+				f = fopen(HI_PLAYER, "w");
+				if (f)
+				{
+					fprintf(f, "stop\n");
+					fclose(f);
+				}
 			}
 			self->playing = FALSE;
 		}
@@ -1799,7 +1815,12 @@ static gboolean gst_dvbvideosink_set_caps(GstBaseSink *basesink, GstCaps *caps)
 			}
 			if (!self->playing)
 			{
-				ioctl(self->fd, VIDEO_PLAY);
+				f = fopen(HI_PLAYER, "w");
+				if (f)
+				{
+					fprintf(f, "play 0 -1 %d -1 0 %d -1\n", self->stream_type, VIDEO_SOURCE_MEMORY);
+					fclose(f);
+				}
 			}
 		}
 		self->playing = TRUE;
@@ -1817,7 +1838,7 @@ static gboolean gst_dvbvideosink_start(GstBaseSink *basesink)
 	GstDVBVideoSink *self = GST_DVBVIDEOSINK(basesink);
 
 	GST_DEBUG_OBJECT(self, "start");
-	FILE *f;
+	FILE *f = NULL;
 
 	if (socketpair(PF_UNIX, SOCK_STREAM, 0, self->unlockfd) < 0)
 	{
@@ -1861,16 +1882,24 @@ static gboolean gst_dvbvideosink_stop(GstBaseSink *basesink)
 	if (self->fd >= 0)
 	{
 		if (self->playing)
-			ioctl(self->fd, VIDEO_STOP);
-		if (self->rate != 1.0)
 		{
-			ioctl(self->fd, VIDEO_SLOWMOTION, 0);
-			ioctl(self->fd, VIDEO_FAST_FORWARD, 0);
-			self->rate = 1.0;
+			f = fopen(HI_PLAYER, "w");
+			if (f)
+			{
+				fprintf(f, "stop\n");
+				fclose(f);
+			}
 		}
+		if (self->rate != 1.0)
+			self->rate = 1.0;
 		ioctl(self->fd, VIDEO_SELECT_SOURCE, VIDEO_SOURCE_DEMUX);
-		if(ioctl(self->fd, VIDEO_CLEAR_BUFFER) >= 0)
+		f = fopen(HI_PLAYER, "w");
+		if (f)
+		{
+			fprintf(f, "clearbuffer\n");
+			fclose(f);
 			GST_INFO_OBJECT(self, "STOP VIDEO BUFFER FLUSHED");
+		}
 		close(self->fd);
 	}
 	if (self->fddata >= 0)
@@ -1931,7 +1960,7 @@ static GstStateChangeReturn gst_dvbvideosink_change_state(GstElement *element, G
 {
 	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 	GstDVBVideoSink *self = GST_DVBVIDEOSINK (element);
-	FILE *f;
+	FILE *f = NULL;
 
 	switch (transition)
 	{
@@ -2008,7 +2037,12 @@ static GstStateChangeReturn gst_dvbvideosink_change_state(GstElement *element, G
 			gst_element_post_message (GST_ELEMENT (element), msg);
 #endif
 			ioctl(self->fd, VIDEO_SELECT_SOURCE, VIDEO_SOURCE_MEMORY);
-			ioctl(self->fd, VIDEO_FREEZE);
+			f = fopen(HI_PLAYER, "w");
+			if (f)
+			{
+				fprintf(f, "pause\n");
+				fclose(f);
+			}
 		}
 		if(get_downmix_ready())
 			self->using_dts_downmix = TRUE;
@@ -2016,7 +2050,14 @@ static GstStateChangeReturn gst_dvbvideosink_change_state(GstElement *element, G
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
 		GST_INFO_OBJECT (self,"GST_STATE_CHANGE_PAUSED_TO_PLAYING");
 		if (self->fd >= 0)
-			ioctl(self->fd, VIDEO_CONTINUE);
+		{
+			f = fopen(HI_PLAYER, "w");
+			if (f)
+			{
+				fprintf(f, "resume\n");
+				fclose(f);
+			}
+		}
 		self->paused = FALSE;
 		break;
 	default:
@@ -2030,7 +2071,15 @@ static GstStateChangeReturn gst_dvbvideosink_change_state(GstElement *element, G
 	case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
 		GST_INFO_OBJECT (self,"GST_STATE_CHANGE_PLAYING_TO_PAUSED");
 		self->paused = TRUE;
-		if (self->fd >= 0) ioctl(self->fd, VIDEO_FREEZE);
+		if (self->fd >= 0)
+		{
+			f = fopen(HI_PLAYER, "w");
+			if (f)
+			{
+				fprintf(f, "pause\n");
+				fclose(f);
+			}
+		}
 		/* wakeup the poll */
 		write(self->unlockfd[1], "\x01", 1);
 		break;
